@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom'
 import './index.css'
 import App from './App'
 import firebase from 'firebase'
+import { initializeFirebase } from 'react-firestore-connect'
 
 // Initialize Firebase
 var config = {
@@ -19,5 +20,7 @@ firebase.initializeApp(config)
 const firestore = firebase.firestore()
 const settings = { timestampsInSnapshots: true }
 firestore.settings(settings)
+
+initializeFirebase(firebase)
 
 ReactDOM.render(<App />, document.getElementById('root'))

@@ -14,28 +14,42 @@ type State = {|
     [string]: Function,
   }
 |}
+
+let firebase: any = null
+
+function initializeFirebase(firebaseInstance: any) {
+  firebase = firebaseInstance
+}
+
 const connectFirestore = (
   queryMapFn: (db: Object, props: *, uid: string | null) => QueryMap,
   ComposedComponent: any,
   // By default we fetch data with realTime listener,
   // but programmer can specify to get data just once
-  type?: 'once',
+  type?: 'once'
   // Either firebase from 'react-native-firebase' for mobile apps
   // or firebase from 'firebase' for web apps
-  firebase: any
 ) => {
   class FirestoreProvider extends React.Component<any, State> {
     state = {
       results: {},
-      references: {}
+      references: {},
     }
     componentDidMount = () => {
       if (!firebase) {
-        console.error('No firebase instance provided!')
+        console.error('No firebase instance provided! Please, make sure that you invoked ' +
+          'initializeFirebase function with correct firebase instance in the root of your application!')
         return
       }
-      // $FlowFixMe
-      const uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
+
+      let uid = null
+      try {
+        // $FlowFixMe
+        uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
+      } catch (e) {
+        console.warn('Unable to retrieve current user.', e)
+      }
+
       const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
 
       Object.entries(queryMap).forEach(
@@ -99,7 +113,7 @@ const connectFirestore = (
             if (querySnapshot.docs) {
               return querySnapshot.docs.map(doc => ({
                 id: doc.id,
-                ...doc.data()
+                ...doc.data(),
               }))
             }
             // Otherwise, it is doc - return doc itself & rename it for clarity
@@ -129,7 +143,7 @@ const connectFirestore = (
             // If it is query snapshot, save entire result set
             const data = querySnapshot.docs.map(doc => ({
               id: doc.id,
-              ...doc.data()
+              ...doc.data(),
             }))
             this.updateResults(data, property, isArray)
           } else {
@@ -161,8 +175,8 @@ const connectFirestore = (
       return ({
         results: {
           ...state.results,
-          [property]: dataInCorrectFormat
-        }
+          [property]: dataInCorrectFormat,
+        },
       })
     })
   }
@@ -178,8 +192,8 @@ const connectFirestore = (
       return ({
         references: {
           ...state.references,
-          [property]: referenceInCorrectFormat
-        }
+          [property]: referenceInCorrectFormat,
+        },
       })
     })
   }
@@ -196,10 +210,13 @@ const connectFirestore = (
 
   hoistNonReactStatics(FirestoreProvider, ComposedComponent, {
     // Should not be hoisted but for some reason it is, blacklisting it manually works
-    getDerivedStateFromProps: true
+    getDerivedStateFromProps: true,
   })
 
   return FirestoreProvider
 }
 
-export default connectFirestore
+export {
+  connectFirestore,
+  initializeFirebase,
+}
