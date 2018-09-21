@@ -3,3 +3,7 @@ body {
   padding: 0;
   font-family: sans-serif;
 }
+
+.main-wrapper {
+  padding: 30px 60px;
+}
