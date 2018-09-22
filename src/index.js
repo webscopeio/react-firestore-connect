@@ -60,21 +60,17 @@ const connectFirestore = (
             switch (type) {
               case 'once': {
                 if (Array.isArray(query)) {
-                  query.map(promise => promise
-                    .then(docRef => this.resolveGetQuery(docRef, property, true)))
+                  query.map(docRef => this.resolveGetQuery(docRef, property, true))
                 } else {
-                  query
-                    .then(docRef => this.resolveGetQuery(docRef, property))
+                  this.resolveGetQuery(query, property)
                 }
                 break
               }
               default: {
                 if (Array.isArray(query)) {
-                  query.map(promise => promise
-                    .then(docRef => this.resolveRealTimeQuery(docRef, property, true)))
+                  query.map(docRef => this.resolveRealTimeQuery(docRef, property, true))
                 } else {
-                  query
-                    .then(docRef => this.resolveRealTimeQuery(docRef, property))
+                  this.resolveRealTimeQuery(query, property)
                 }
               }
             }
