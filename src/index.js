@@ -116,7 +116,10 @@ const connectFirestore = (
             const doc = querySnapshot
             return (
               doc.exists
-                ? doc.data()
+                ? ({
+                  id: doc.id,
+                  ...doc.data(),
+                })
                 : null
             )
           })
@@ -146,7 +149,10 @@ const connectFirestore = (
             // Otherwise, it is doc - save snapshot of the doc itself.
             // Renamed for clarity.
             const doc = querySnapshot
-            const data = doc.exists ? doc.data() : null
+            const data = doc.exists ? ({
+              id: doc.id,
+              ...doc.data(),
+            }) : null
             this.updateResults(data, property, isArray)
           }
         })
