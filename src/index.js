@@ -59,17 +59,48 @@ const connectFirestore = (
           if (query) {
             switch (type) {
               case 'once': {
+                // Checks whether it is array of docRefs or just one docRef
                 if (Array.isArray(query)) {
-                  query.map(docRef => this.resolveGetQuery(docRef, property, true))
+                  query.map((potentialDocRef) => {
+                    // Basically checks whether function is promise (if yes, it is probably
+                    // async function), if yes handles it as promise
+                    if (potentialDocRef.then) {
+                      // Renaming just for clarity
+                      return potentialDocRef
+                        .then(docRef => this.resolveGetQuery(docRef, property, true))
+                    }
+                    // Otherwise treat the call as a normal docRef
+                    return this.resolveGetQuery(potentialDocRef, property, true)
+                  })
+                } else if (query.then) {
+                  // Same as above - checks whether it is promise (async function)
+                  query
+                    .then(docRef => this.resolveGetQuery(docRef, property))
                 } else {
+                  // Otherwise treat the call as a normal docRef (query)
                   this.resolveGetQuery(query, property)
                 }
                 break
               }
               default: {
+                // Checks whether it is array of docRefs or just one docRef
                 if (Array.isArray(query)) {
-                  query.map(docRef => this.resolveRealTimeQuery(docRef, property, true))
+                  query.map((potentialDocRef) => {
+                    // Basically checks whether function is promise (if yes, it is probably
+                    // async function), if yes handles it as promise
+                    if (potentialDocRef.then) {
+                      return potentialDocRef
+                        .then(docRef => this.resolveRealTimeQuery(docRef, property, true))
+                    }
+                    // Otherwise treat the call as a normal docRef
+                    return this.resolveRealTimeQuery(potentialDocRef, property, true)
+                  })
+                } else if (query.then) {
+                  // Same as above - checks whether it is promise (async function)
+                  query
+                    .then(docRef => this.resolveRealTimeQuery(docRef, property))
                 } else {
+                  // Otherwise treat the call as a normal docRef (query)
                   this.resolveRealTimeQuery(query, property)
                 }
               }
@@ -82,7 +113,7 @@ const connectFirestore = (
       if (!firebase) {
         return
       }
-      // If type of connection is realTime, unsubscribe listener for the data
+      // If type of connection is real time, unsubscribe listener for the data
       if (type !== 'once') {
         Object.values(this.state.references).forEach(
           (reference) => {
@@ -159,6 +190,11 @@ const connectFirestore = (
       // Store the reference, so when unmounting we can cancel the listener
       this.updateReferences(reference, property, isArray)
       return reference
+    }
+    // This is done mainly
+    if (docRef && docRef.then) {
+      docRef
+        .then(docRef => this.resolveRealTimeQuery(docRef, property, isArray))
     }
 
     console.error('docRef.onSnapshot not found! Do not include .onSnapshot() in your firestore call!')
