@@ -54,31 +54,6 @@ const connectFirestore = (
       const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
       this.resolveQueryMap(queryMap)
     }
-    shouldUpdateResult = async (property: string, query: any) => {
-      let shouldUpdate = false
-      const {
-        results,
-      } = this.state
-      const propertyInState = results[property]
-      if (Array.isArray(query)) {
-        query.forEach(async (potentialDocRef, index) => {
-          const previousDoc = propertyInState && propertyInState[index]
-          const previousDocId = previousDoc && previousDoc.id
-          const docRef = await potentialDocRef // In case async function was provided
-          if (docRef.id !== previousDocId) {
-            shouldUpdate = true
-          }
-        })
-        const previousArrayLength = propertyInState && propertyInState.length
-        if (query.length !== previousArrayLength) {
-          shouldUpdate = true
-        }
-        return shouldUpdate
-      }
-      const previousDocId = propertyInState && propertyInState.id
-      const docRef = await query // In case async function was provided
-      return docRef.id !== previousDocId
-    }
     componentDidUpdate = (prevProps: Object) => {
       if (prevProps === this.props) {
         return
@@ -278,9 +253,9 @@ const connectFirestore = (
             },
           })
         }
-        const dataInCorrectFormat = []
+        const dataInCorrectFormat = state.results[property] || []
         // $FlowFixMe - Store data on exactly the index in which order queries were sent
-        dataInCorrectFormat[index] = state.results[property] || data
+        dataInCorrectFormat[index] = data
 
         return ({
           results: {
@@ -306,6 +281,32 @@ const connectFirestore = (
           },
         })
       })
+    }
+
+    shouldUpdateResult = async (property: string, query: any) => {
+      let shouldUpdate = false
+      const {
+        results,
+      } = this.state
+      const propertyInState = results[property]
+      if (Array.isArray(query)) {
+        query.forEach(async (potentialDocRef, index) => {
+          const previousDoc = propertyInState && propertyInState[index]
+          const previousDocId = previousDoc && previousDoc.id
+          const docRef = await potentialDocRef // In case async function was provided
+          if (docRef.id !== previousDocId) {
+            shouldUpdate = true
+          }
+        })
+        const previousArrayLength = propertyInState && propertyInState.length
+        if (query.length !== previousArrayLength) {
+          shouldUpdate = true
+        }
+        return shouldUpdate
+      }
+      const previousDocId = propertyInState && propertyInState.id
+      const docRef = await query // In case async function was provided
+      return docRef.id !== previousDocId
     }
 
     render() {
