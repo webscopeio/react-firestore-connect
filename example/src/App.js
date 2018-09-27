@@ -81,6 +81,7 @@ class App extends Component<Props, State> {
       })
     } else {
       this.setState({
+        // $FlowFixMe
         user: oliver,
       })
     }

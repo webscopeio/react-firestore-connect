@@ -79,15 +79,11 @@ const connectFirestore = (
       const docRef = await query // In case async function was provided
       return docRef.id !== previousDocId
     }
-    componentDidUpdate = (prevProps) => {
-      let uid = null
-      const {
-        results,
-        references,
-      } = this.state
+    componentDidUpdate = (prevProps: Object) => {
       if (prevProps === this.props) {
         return
       }
+      let uid = null
       try {
         // $FlowFixMe
         uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
@@ -100,22 +96,21 @@ const connectFirestore = (
         if (!shouldUpdateResult) {
           return
         }
-        console.log('not so interesting', property, shouldUpdateResult)
         if (Array.isArray(query)) {
-          console.log('interesting')
+          // Clear state first
           this.setState(state => ({
             results: {
               ...state.results,
               [property]: null,
             },
           }),
-          () => {
-            console.log('debugger', this.state)
-            return query.forEach(async (docRef, index) => (
+          () => // After clearing state, update the prop with correct data
+            query.forEach(async (docRef, index) => (
               this.resolveGetQuery(await docRef, property, true, index)
             ))
-          })
+          )
         } else {
+          // No need to clear data here, because we handle primitive data types
           const docRef = await query // In case of async passed in
           this.resolveGetQuery(docRef, property) // no need to rewrite state here
         }
@@ -201,8 +196,8 @@ const connectFirestore = (
       )
     }
     resolveGetQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
-    // We want to be safe in here, so due to some inconsistent state whole app
-    // won't crash. This shouldn't happen unless programmer misuses this HOC
+      // We want to be safe in here, so due to some inconsistent state whole app
+      // won't crash. This shouldn't happen unless programmer misuses this HOC
       if (docRef && docRef.get) {
         docRef
           .get()
@@ -233,93 +228,94 @@ const connectFirestore = (
       }
     }
 
-  resolveRealTimeQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
-    // We want to be safe in here, so due to some inconsistent state whole app
-    // won't crash. This shouldn't happen unless programmer misuses this HOC
-    if (docRef && docRef.onSnapshot) {
-      const reference = docRef
-        .onSnapshot((querySnapshot) => {
-          // Checks whether we are working with querySnapshot or with a doc
-          if (querySnapshot.docs) {
-            // If it is query snapshot, save entire result set
-            const data = querySnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-            this.updateResults(data, property, isArray, index)
-          } else {
-            // Otherwise, it is doc - save snapshot of the doc itself.
-            // Renamed for clarity.
-            const doc = querySnapshot
-            const data = doc.exists ? ({
-              id: doc.id,
-              ...doc.data(),
-            }) : null
-            this.updateResults(data, property, isArray, index)
-          }
-        })
-      // Store the reference, so when unmounting we can cancel the listener
-      this.updateReferences(reference, property, isArray, index)
-      return reference
-    }
-    // This is done mainly
-    if (docRef && docRef.then) {
-      docRef
-        .then(docRef => this.resolveRealTimeQuery(docRef, property, isArray, index))
+    resolveRealTimeQuery = (
+      docRef: Object,
+      property: string,
+      isArray?: boolean,
+      index?: number
+    ) => {
+      // We want to be safe in here, so due to some inconsistent state whole app
+      // won't crash. This shouldn't happen unless programmer misuses this HOC
+      if (docRef && docRef.onSnapshot) {
+        const reference = docRef
+          .onSnapshot((querySnapshot) => {
+            // Checks whether we are working with querySnapshot or with a doc
+            if (querySnapshot.docs) {
+              // If it is query snapshot, save entire result set
+              const data = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+              }))
+              this.updateResults(data, property, isArray, index)
+            } else {
+              // Otherwise, it is doc - save snapshot of the doc itself.
+              // Renamed for clarity.
+              const doc = querySnapshot
+              const data = doc.exists ? ({
+                id: doc.id,
+                ...doc.data(),
+              }) : null
+              this.updateResults(data, property, isArray, index)
+            }
+          })
+        // Store the reference, so when unmounting we can cancel the listener
+        this.updateReferences(reference, property, isArray)
+        return reference
+      }
+
+      console.error('docRef.onSnapshot not found! Do not include .onSnapshot() in your firestore call!')
+      // If something weird happens, just store docRef for easier debugging
+      return this.updateResults(docRef, property, isArray, index)
     }
 
-    console.error('docRef.onSnapshot not found! Do not include .onSnapshot() in your firestore call!')
-    // If something weird happens, just store docRef for easier debugging
-    return this.updateResults(docRef, property, isArray, index)
-  }
+    updateResults = (data: any, property: string, isArray?: boolean, index?: number) => {
+      this.setState((state) => {
+        if (!isArray) {
+          return ({
+            results: {
+              ...state.results,
+              [property]: data,
+            },
+          })
+        }
+        const dataInCorrectFormat = []
+        // $FlowFixMe - Store data on exactly the index in which order queries were sent
+        dataInCorrectFormat[index] = state.results[property] || data
 
-  updateResults = (data: any, property: string, isArray?: boolean, index?: number) => {
-    this.setState((state) => {
-      if (!isArray) {
         return ({
           results: {
             ...state.results,
-            [property]: data,
+            [property]: dataInCorrectFormat,
           },
         })
-      }
-      const dataInCorrectFormat = state.results[property] || []
-      dataInCorrectFormat[index] = data
-
-      return ({
-        results: {
-          ...state.results,
-          [property]: dataInCorrectFormat,
-        },
       })
-    })
-  }
+    }
 
-  updateReferences = (reference: Function, property: string, isArray?: boolean) => {
-    this.setState((state) => {
-      let referenceInCorrectFormat = reference
-      if (isArray) {
-        referenceInCorrectFormat = state.references[property]
-          ? [...state.references[property], reference]
-          : [reference]
-      }
-      return ({
-        references: {
-          ...state.references,
-          [property]: referenceInCorrectFormat,
-        },
+    updateReferences = (reference: Function, property: string, isArray?: boolean) => {
+      this.setState((state) => {
+        let referenceInCorrectFormat = reference
+        if (isArray) {
+          referenceInCorrectFormat = state.references[property]
+            ? [...state.references[property], reference]
+            : [reference]
+        }
+        return ({
+          references: {
+            ...state.references,
+            [property]: referenceInCorrectFormat,
+          },
+        })
       })
-    })
-  }
+    }
 
-  render() {
-    return (
-      <ComposedComponent
-        {...this.props}
-        {...this.state.results}
-      />
-    )
-  }
+    render() {
+      return (
+        <ComposedComponent
+          {...this.props}
+          {...this.state.results}
+        />
+      )
+    }
   }
 
   hoistNonReactStatics(FirestoreProvider, ComposedComponent, {
