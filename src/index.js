@@ -1,6 +1,7 @@
 // @flow
 import React from 'react'
 import hoistNonReactStatics from 'hoist-non-react-statics'
+import 'babel-polyfill' // to enable async / await (clear ups the code a lot)
 
 type QueryMap = {
   [string]: Promise<any> | Array<Promise<any>>,
@@ -51,64 +52,76 @@ const connectFirestore = (
       }
 
       const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
-
-      Object.entries(queryMap).forEach(
-        // Type should be [string, Promise<any>], but flow cannot deal with Object.entries
-        // see issue https://github.com/facebook/flow/issues/2221
-        ([property, query]: [string, any]) => {
-          if (query) {
-            switch (type) {
-              case 'once': {
-                // Checks whether it is array of docRefs or just one docRef
-                if (Array.isArray(query)) {
-                  query.map((potentialDocRef) => {
-                    // Basically checks whether function is promise (if yes, it is probably
-                    // async function), if yes handles it as promise
-                    if (potentialDocRef.then) {
-                      // Renaming just for clarity
-                      return potentialDocRef
-                        .then(docRef => this.resolveGetQuery(docRef, property, true))
-                    }
-                    // Otherwise treat the call as a normal docRef
-                    return this.resolveGetQuery(potentialDocRef, property, true)
-                  })
-                } else if (query.then) {
-                  // Same as above - checks whether it is promise (async function)
-                  query
-                    .then(docRef => this.resolveGetQuery(docRef, property))
-                } else {
-                  // Otherwise treat the call as a normal docRef (query)
-                  this.resolveGetQuery(query, property)
-                }
-                break
-              }
-              default: {
-                // Checks whether it is array of docRefs or just one docRef
-                if (Array.isArray(query)) {
-                  query.map((potentialDocRef) => {
-                    // Basically checks whether function is promise (if yes, it is probably
-                    // async function), if yes handles it as promise
-                    if (potentialDocRef.then) {
-                      return potentialDocRef
-                        .then(docRef => this.resolveRealTimeQuery(docRef, property, true))
-                    }
-                    // Otherwise treat the call as a normal docRef
-                    return this.resolveRealTimeQuery(potentialDocRef, property, true)
-                  })
-                } else if (query.then) {
-                  // Same as above - checks whether it is promise (async function)
-                  query
-                    .then(docRef => this.resolveRealTimeQuery(docRef, property))
-                } else {
-                  // Otherwise treat the call as a normal docRef (query)
-                  this.resolveRealTimeQuery(query, property)
-                }
-              }
-            }
-          }
-        }
-      )
+      this.resolveQueryMap(queryMap)
     }
+    shouldUpdateResult = async (property: string, query: any) => {
+      let shouldUpdate = false
+      const {
+        results,
+      } = this.state
+      const propertyInState = results[property]
+      if (Array.isArray(query)) {
+        query.forEach(async (potentialDocRef, index) => {
+          const previousDoc = propertyInState && propertyInState[index]
+          const previousDocId = previousDoc && previousDoc.id
+          const docRef = await potentialDocRef // In case async function was provided
+          if (docRef.id !== previousDocId) {
+            shouldUpdate = true
+          }
+        })
+        const previousArrayLength = propertyInState && propertyInState.length
+        if (query.length !== previousArrayLength) {
+          shouldUpdate = true
+        }
+        return shouldUpdate
+      }
+      const previousDocId = propertyInState && propertyInState.id
+      const docRef = await query // In case async function was provided
+      return docRef.id !== previousDocId
+    }
+    componentDidUpdate = (prevProps) => {
+      let uid = null
+      const {
+        results,
+        references,
+      } = this.state
+      if (prevProps === this.props) {
+        return
+      }
+      try {
+        // $FlowFixMe
+        uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
+      } catch (e) {
+        console.warn('Unable to retrieve current user.', e)
+      }
+      const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
+      Object.entries(queryMap).forEach(async ([property, query]: [string, any]) => {
+        const shouldUpdateResult = await this.shouldUpdateResult(property, query)
+        if (!shouldUpdateResult) {
+          return
+        }
+        console.log('not so interesting', property, shouldUpdateResult)
+        if (Array.isArray(query)) {
+          console.log('interesting')
+          this.setState(state => ({
+            results: {
+              ...state.results,
+              [property]: null,
+            },
+          }),
+          () => {
+            console.log('debugger', this.state)
+            return query.forEach(async (docRef, index) => (
+              this.resolveGetQuery(await docRef, property, true, index)
+            ))
+          })
+        } else {
+          const docRef = await query // In case of async passed in
+          this.resolveGetQuery(docRef, property) // no need to rewrite state here
+        }
+      })
+    }
+
     componentWillUnmount = () => {
       if (!firebase) {
         return
@@ -128,8 +141,66 @@ const connectFirestore = (
         )
       }
     }
-
-    resolveGetQuery = (docRef: Object, property: string, isArray?: boolean) => {
+    resolveQueryMap = (queryMap: QueryMap) => {
+      Object.entries(queryMap).forEach(
+        // Type should be [string, Promise<any>], but flow cannot deal with Object.entries
+        // see issue https://github.com/facebook/flow/issues/2221
+        ([property, query]: [string, any]) => {
+          if (query) {
+            switch (type) {
+              // #TODO These two cases could be probably unified pretty easily
+              case 'once': {
+                // Checks whether it is array of docRefs or just one docRef
+                if (Array.isArray(query)) {
+                  query.map((potentialDocRef, index) => {
+                    // Basically checks whether function is promise (if yes, it is probably
+                    // async function), if yes handles it as promise
+                    if (potentialDocRef.then) {
+                      // Renaming just for clarity
+                      return potentialDocRef
+                        .then(docRef => this.resolveGetQuery(docRef, property, true, index))
+                    }
+                    // Otherwise treat the call as a normal docRef
+                    return this.resolveGetQuery(potentialDocRef, property, true, index)
+                  })
+                } else if (query.then) {
+                  // Same as above - checks whether it is promise (async function)
+                  query
+                    .then(docRef => this.resolveGetQuery(docRef, property))
+                } else {
+                  // Otherwise treat the call as a normal docRef (query)
+                  this.resolveGetQuery(query, property)
+                }
+                break
+              }
+              default: {
+                // Checks whether it is array of docRefs or just one docRef
+                if (Array.isArray(query)) {
+                  query.map((potentialDocRef, index) => {
+                    // Basically checks whether function is promise (if yes, it is probably
+                    // async function), if yes handles it as promise
+                    if (potentialDocRef.then) {
+                      return potentialDocRef
+                        .then(docRef => this.resolveRealTimeQuery(docRef, property, true, index))
+                    }
+                    // Otherwise treat the call as a normal docRef
+                    return this.resolveRealTimeQuery(potentialDocRef, property, true, index)
+                  })
+                } else if (query.then) {
+                  // Same as above - checks whether it is promise (async function)
+                  query
+                    .then(docRef => this.resolveRealTimeQuery(docRef, property))
+                } else {
+                  // Otherwise treat the call as a normal docRef (query)
+                  this.resolveRealTimeQuery(query, property)
+                }
+              }
+            }
+          }
+        }
+      )
+    }
+    resolveGetQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
     // We want to be safe in here, so due to some inconsistent state whole app
     // won't crash. This shouldn't happen unless programmer misuses this HOC
       if (docRef && docRef.get) {
@@ -154,15 +225,15 @@ const connectFirestore = (
                 : null
             )
           })
-          .then(data => this.updateResults(data, property, isArray))
+          .then(data => this.updateResults(data, property, isArray, index))
       } else {
         console.error('docRef.get not found! Do not include .get() in your firestore call!')
         // If something weird happens, just store docRef for easier debugging
-        this.updateResults(docRef, property, isArray)
+        this.updateResults(docRef, property, isArray, index)
       }
     }
 
-  resolveRealTimeQuery = (docRef: Object, property: string, isArray?: boolean) => {
+  resolveRealTimeQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
     // We want to be safe in here, so due to some inconsistent state whole app
     // won't crash. This shouldn't happen unless programmer misuses this HOC
     if (docRef && docRef.onSnapshot) {
@@ -175,7 +246,7 @@ const connectFirestore = (
               id: doc.id,
               ...doc.data(),
             }))
-            this.updateResults(data, property, isArray)
+            this.updateResults(data, property, isArray, index)
           } else {
             // Otherwise, it is doc - save snapshot of the doc itself.
             // Renamed for clarity.
@@ -184,32 +255,37 @@ const connectFirestore = (
               id: doc.id,
               ...doc.data(),
             }) : null
-            this.updateResults(data, property, isArray)
+            this.updateResults(data, property, isArray, index)
           }
         })
       // Store the reference, so when unmounting we can cancel the listener
-      this.updateReferences(reference, property, isArray)
+      this.updateReferences(reference, property, isArray, index)
       return reference
     }
     // This is done mainly
     if (docRef && docRef.then) {
       docRef
-        .then(docRef => this.resolveRealTimeQuery(docRef, property, isArray))
+        .then(docRef => this.resolveRealTimeQuery(docRef, property, isArray, index))
     }
 
     console.error('docRef.onSnapshot not found! Do not include .onSnapshot() in your firestore call!')
     // If something weird happens, just store docRef for easier debugging
-    return this.updateResults(docRef, property, isArray)
+    return this.updateResults(docRef, property, isArray, index)
   }
 
-  updateResults = (data: any, property: string, isArray?: boolean) => {
+  updateResults = (data: any, property: string, isArray?: boolean, index?: number) => {
     this.setState((state) => {
-      let dataInCorrectFormat = data
-      if (isArray) {
-        dataInCorrectFormat = state.results[property]
-          ? [...state.results[property], data]
-          : [data]
+      if (!isArray) {
+        return ({
+          results: {
+            ...state.results,
+            [property]: data,
+          },
+        })
       }
+      const dataInCorrectFormat = state.results[property] || []
+      dataInCorrectFormat[index] = data
+
       return ({
         results: {
           ...state.results,
