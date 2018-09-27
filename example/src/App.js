@@ -57,7 +57,6 @@ const UserFriendsWrapper = connectFirestore(
     userItself: getUserById(db, props.user.id),
   }),
   userFriendsWrapper,
-  'once'
 )
 type State = {|
   user: null | UserType

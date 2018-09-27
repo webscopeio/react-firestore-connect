@@ -72,6 +72,14 @@ const connectFirestore = (
           return
         }
         if (Array.isArray(query)) {
+          if (type !== 'once') {
+            const {
+              references: {
+                [property]: referencesArray,
+              },
+            } = this.state
+            referencesArray.forEach(reference => reference())
+          }
           // Clear state first
           this.setState(state => ({
             results: {
@@ -81,13 +89,24 @@ const connectFirestore = (
           }),
           () => // After clearing state, update the prop with correct data
             query.forEach(async (docRef, index) => (
-              this.resolveGetQuery(await docRef, property, true, index)
+              type === 'once'
+                ? this.resolveGetQuery(await docRef, property, true, index)
+                : this.resolveRealTimeQuery(await docRef, property, true, index)
             ))
           )
         } else {
-          // No need to clear data here, because we handle primitive data types
           const docRef = await query // In case of async passed in
-          this.resolveGetQuery(docRef, property) // no need to rewrite state here
+          if (type !== 'once') {
+            const {
+              references: {
+                [property]: reference,
+              },
+            } = this.state
+            reference()
+            this.resolveRealTimeQuery(docRef, property)
+          } else {
+            this.resolveGetQuery(docRef, property)
+          }
         }
       })
     }
@@ -196,7 +215,7 @@ const connectFirestore = (
             }
           })
         // Store the reference, so when unmounting we can cancel the listener
-        this.updateReferences(reference, property, isArray)
+        this.updateReferences(reference, property, isArray, index)
         return reference
       }
 
@@ -228,14 +247,24 @@ const connectFirestore = (
       })
     }
 
-    updateReferences = (reference: Function, property: string, isArray?: boolean) => {
+    updateReferences = (
+      reference: Function,
+      property: string,
+      isArray?: boolean,
+      index?: number) => {
       this.setState((state) => {
-        let referenceInCorrectFormat = reference
-        if (isArray) {
-          referenceInCorrectFormat = state.references[property]
-            ? [...state.references[property], reference]
-            : [reference]
+        if (!isArray) {
+          return ({
+            references: {
+              ...state.references,
+              [property]: reference,
+            },
+          })
         }
+        const referenceInCorrectFormat = state.references[property] || []
+        // $FlowFixMe - Store the reference on exactly the index in which order queries were sent
+        referenceInCorrectFormat[index] = reference
+
         return ({
           references: {
             ...state.references,
