@@ -115,58 +115,20 @@ const connectFirestore = (
       Object.entries(queryMap).forEach(
         // Type should be [string, Promise<any>], but flow cannot deal with Object.entries
         // see issue https://github.com/facebook/flow/issues/2221
-        ([property, query]: [string, any]) => {
-          if (query) {
-            switch (type) {
-              // #TODO These two cases could be probably unified pretty easily
-              case 'once': {
-                // Checks whether it is array of docRefs or just one docRef
-                if (Array.isArray(query)) {
-                  query.map((potentialDocRef, index) => {
-                    // Basically checks whether function is promise (if yes, it is probably
-                    // async function), if yes handles it as promise
-                    if (potentialDocRef.then) {
-                      // Renaming just for clarity
-                      return potentialDocRef
-                        .then(docRef => this.resolveGetQuery(docRef, property, true, index))
-                    }
-                    // Otherwise treat the call as a normal docRef
-                    return this.resolveGetQuery(potentialDocRef, property, true, index)
-                  })
-                } else if (query.then) {
-                  // Same as above - checks whether it is promise (async function)
-                  query
-                    .then(docRef => this.resolveGetQuery(docRef, property))
-                } else {
-                  // Otherwise treat the call as a normal docRef (query)
-                  this.resolveGetQuery(query, property)
-                }
-                break
-              }
-              default: {
-                // Checks whether it is array of docRefs or just one docRef
-                if (Array.isArray(query)) {
-                  query.map((potentialDocRef, index) => {
-                    // Basically checks whether function is promise (if yes, it is probably
-                    // async function), if yes handles it as promise
-                    if (potentialDocRef.then) {
-                      return potentialDocRef
-                        .then(docRef => this.resolveRealTimeQuery(docRef, property, true, index))
-                    }
-                    // Otherwise treat the call as a normal docRef
-                    return this.resolveRealTimeQuery(potentialDocRef, property, true, index)
-                  })
-                } else if (query.then) {
-                  // Same as above - checks whether it is promise (async function)
-                  query
-                    .then(docRef => this.resolveRealTimeQuery(docRef, property))
-                } else {
-                  // Otherwise treat the call as a normal docRef (query)
-                  this.resolveRealTimeQuery(query, property)
-                }
-              }
-            }
+        async ([property, query]: [string, any]) => {
+          // Checks whether it is array of docRefs or just one docRef
+          if (Array.isArray(query)) {
+            return query.map(async (potentialDocRef, index) => {
+              const docRef = await potentialDocRef // In case of async function passed in
+              return type === 'once'
+                ? this.resolveGetQuery(docRef, property, true, index)
+                : this.resolveRealTimeQuery(docRef, property, true, index)
+            })
           }
+          const docRef = await query // In case of async function passed in
+          return type === 'once'
+            ? this.resolveGetQuery(docRef, property)
+            : this.resolveRealTimeQuery(docRef, property)
         }
       )
     }
