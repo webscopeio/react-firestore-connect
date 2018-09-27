@@ -27,35 +27,64 @@ type Props = {|
 |}
 
 
-const oliverFriendsWrapper = ({ oliverFriends }) => {
-  if (!oliverFriends) {
-    return <div />
+const userFriendsWrapper = ({ friends, changeUser, userItself }) => {
+  if (!friends || !userItself) {
+    return <div>Loading...</div>
   }
-  const oliverFriendsString = oliverFriends.map(
+  const friendsString = friends.map(
     ({ firstName }) => firstName
   ).join(' and ')
 
   return (
     <div>
       {
-        oliverFriendsString
+        friendsString
       }
+      <button onClick={changeUser}>Change user!</button>
+      <br />
+      <br />
+      It appears {userItself.firstName} has some friends!
     </div>
   )
 }
 
 // Example how to resolve array of promises
-const OliverFriendsWrapper = connectFirestore(
+const UserFriendsWrapper = connectFirestore(
   (db, props) => ({
-    oliverFriends: props.oliver.friends.map(
-      friendId => getUserById(db, friendId)
+    friends: props.user.friends.map(
+      friendId => getUserById(db, friendId),
     ),
+    userItself: getUserById(db, props.user.id),
   }),
-  oliverFriendsWrapper,
+  userFriendsWrapper,
 )
-
+type State = {|
+  user: null | UserType
+|}
 // eslint-disable-next-line react/prefer-stateless-function
-class App extends Component<Props> {
+class App extends Component<Props, State> {
+  state = {
+    user: null,
+  }
+  changeUser = () => {
+    const {
+      user,
+    } = this.state
+    const {
+      users,
+      oliver,
+    } = this.props
+    if (user === oliver || !user) {
+      this.setState({
+        user: users[0],
+      })
+    } else {
+      this.setState({
+        // $FlowFixMe
+        user: oliver,
+      })
+    }
+  }
   render () {
     const {
       users,
@@ -64,6 +93,9 @@ class App extends Component<Props> {
       threeUsers,
       oliver,
     } = this.props
+    const {
+      user,
+    } = this.state
     return (
       <div className="main-wrapper">
         <h1>Call examples with data</h1>
@@ -88,9 +120,14 @@ class App extends Component<Props> {
             ({ firstName, id, lastName }) => <div key={id}>{firstName} {lastName}</div>)}
         </div>
         <div className="">
-          <h2>Get all Oliver Friends</h2>
+          <h2>Get all {(user && user.firstName) || 'Oliver'} Friends</h2>
           {
-            oliver && <OliverFriendsWrapper oliver={oliver} />
+            oliver && (
+              <UserFriendsWrapper
+                user={user || oliver}
+                changeUser={this.changeUser}
+              />
+            )
           }
         </div>
       </div>
