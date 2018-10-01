@@ -78,7 +78,8 @@ const connectFirestore = (
                 [property]: referencesArray,
               },
             } = this.state
-            referencesArray.forEach(reference => reference())
+            // eslint-disable-next-line no-unused-expressions
+            referencesArray && referencesArray.forEach(reference => reference())
           }
           // Clear state first
           this.setState(state => ({
