@@ -179,8 +179,8 @@ const connectFirestore = (
           })
           .then(data => this.updateResults(data, property, isArray, index))
       } else {
-        console.error('docRef.get not found! Do not include .get() in your firestore call!')
-        // If something weird happens, just store docRef for easier debugging
+        // If user sends object or some other type data down the component, just update that
+        // DocRef is `any` type
         this.updateResults(docRef, property, isArray, index)
       }
     }
@@ -219,9 +219,8 @@ const connectFirestore = (
         this.updateReferences(reference, property, isArray, index)
         return reference
       }
-
-      console.error('docRef.onSnapshot not found! Do not include .onSnapshot() in your firestore call!')
-      // If something weird happens, just store docRef for easier debugging
+      // If user sends object or some other type data down the component, just update that
+      // DocRef is `any` type
       return this.updateResults(docRef, property, isArray, index)
     }
 
