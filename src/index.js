@@ -1,5 +1,5 @@
 // @flow
-import React from 'react'
+import * as React from 'react'
 import hoistNonReactStatics from 'hoist-non-react-statics'
 import 'babel-polyfill' // to enable async / await (clear ups the code a lot)
 
@@ -24,13 +24,12 @@ function initializeFirebase(firebaseInstance: any) {
 
 const connectFirestore = (
   queryMapFn: (db: Object, props: *, uid: string | null) => QueryMap,
-  ComposedComponent: any,
   // By default we fetch data with realTime listener,
   // but programmer can specify to get data just once
   type?: 'once'
   // Either firebase from 'react-native-firebase' for mobile apps
   // or firebase from 'firebase' for web apps
-) => {
+) => (ComposedComponent: React.ComponentType<*>) => {
   class FirestoreProvider extends React.Component<any, State> {
     state = {
       results: {},
