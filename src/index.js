@@ -52,7 +52,11 @@ const connectFirestore = (
       }
 
       const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
-      this.resolveQueryMap(queryMap)
+      try {
+        this.resolveQueryMap(queryMap)
+      } catch (e) {
+        console.warn('RFC: Were not able to resolve query map correctly! Error details:', e)
+      }
     }
     componentDidUpdate = (prevProps: Object) => {
       if (prevProps === this.props) {
@@ -79,7 +83,7 @@ const connectFirestore = (
               },
             } = this.state
             // eslint-disable-next-line no-unused-expressions
-            referencesArray && referencesArray.forEach(reference => reference())
+            referencesArray && referencesArray.forEach(reference => reference && reference())
           }
           // Clear state first
           this.setState(state => ({
@@ -127,7 +131,7 @@ const connectFirestore = (
               return reference.forEach(ref => ref && ref())
             }
             // $FlowFixMe
-            return reference() // this unsubscribes given reference
+            return reference && reference() // this unsubscribes given reference
           }
         )
       }
