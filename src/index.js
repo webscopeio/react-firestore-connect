@@ -300,7 +300,7 @@ const connectFirestore = (
       const docRef = await query // In case async function was provided
       // If it doesn't have id, it is query => we have no way of checking
       // Whether query results changed, therefore just refresh it if it is query
-      return docRef.id !== previousDocId || !docRef.id
+      return docRef && (docRef.id !== previousDocId || !docRef.id)
     }
 
     render() {
