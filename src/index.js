@@ -103,7 +103,8 @@ const connectFirestore = (
                 [property]: reference,
               },
             } = this.state
-            reference()
+            // eslint-disable-next-line no-unused-expressions
+            reference && reference()
             this.resolveRealTimeQuery(docRef, property)
           } else {
             this.resolveGetQuery(docRef, property)
@@ -123,7 +124,7 @@ const connectFirestore = (
             if (Array.isArray(reference)) {
               // In case Array of promises were provided, unsubscribe every one of the listeners
               // $FlowFixMe
-              return reference.forEach(ref => ref())
+              return reference.forEach(ref => ref && ref())
             }
             // $FlowFixMe
             return reference() // this unsubscribes given reference
