@@ -27,7 +27,7 @@ type Props = {|
 |}
 
 
-const userFriendsWrapper = ({ friends, changeUser, userItself }) => {
+const UserFriendsWrapper = ({ friends, changeUser, userItself }) => {
   if (!friends || !userItself) {
     return <div>Loading...</div>
   }
@@ -37,9 +37,7 @@ const userFriendsWrapper = ({ friends, changeUser, userItself }) => {
 
   return (
     <div>
-      {
-        friendsString
-      }
+      {friendsString}
       <button onClick={changeUser}>Change user!</button>
       <br />
       <br />
@@ -49,15 +47,15 @@ const userFriendsWrapper = ({ friends, changeUser, userItself }) => {
 }
 
 // Example how to resolve array of promises
-const UserFriendsWrapper = connectFirestore(
+const UserFriendsWrapperConnected = connectFirestore(
   (db, props) => ({
     friends: props.user.friends.map(
       friendId => getUserById(db, friendId),
     ),
     userItself: getUserById(db, props.user.id),
   }),
-  userFriendsWrapper,
-)
+)(UserFriendsWrapper)
+
 type State = {|
   user: null | UserType
 |}
@@ -123,7 +121,7 @@ class App extends Component<Props, State> {
           <h2>Get all {(user && user.firstName) || 'Oliver'} Friends</h2>
           {
             oliver && (
-              <UserFriendsWrapper
+              <UserFriendsWrapperConnected
                 user={user || oliver}
                 changeUser={this.changeUser}
               />
@@ -143,5 +141,4 @@ export default connectFirestore(
     threeUsers: getThreeUsersOrdered(db),
     oliver: getUserById(db, 'VeLBOoQVssxFrlcsMBu0'),
   }),
-  App
-)
+)(App)
