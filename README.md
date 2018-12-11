@@ -45,6 +45,7 @@ class Example extends Component {
     return <div />
   }
 }
+
 export default connectFirestore(
   // db is reference to firestore DB;
   // props are any props that you are passing to the component - i.e. userId to get specific user
@@ -55,9 +56,8 @@ export default connectFirestore(
     currentUser: db.collection('names').doc(uid), // You can obviously get any document by its ID
     usersArray: [db.collection('names').doc(props.id[0]), db.collection('names').doc(props.id[1]), db.collection('names').doc(props.id[2])], // You can also send array of doc referencies
   }),
-  Example,
   // 'once' -> pass in order to get the data just once
-)
+)(Example)
 
 ```
 
