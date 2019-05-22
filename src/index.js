@@ -17,9 +17,16 @@ type State = {|
 |}
 
 let firebase: any = null
+let errorHandler: Function = console.error
 
-function initializeFirebase(firebaseInstance: any) {
+function initializeFirebase(firebaseInstance: any, optionalHandler?: Function) {
   firebase = firebaseInstance
+  errorHandler = optionalHandler || errorHandler
+}
+
+const getPath = (ref: Object) => {
+  const { parent, id = '' } = ref
+  return parent ? `${getPath(parent)}/${id}` : id
 }
 
 const connectFirestore = (
@@ -36,127 +43,119 @@ const connectFirestore = (
       results: {},
       references: {},
     }
-    componentDidMount = () => {
-      if (!firebase) {
-        console.error('No firebase instance provided! Please, make sure that you invoked ' +
-          'initializeFirebase function with correct firebase instance in the root of your application!')
-        return
-      }
 
-      let uid = null
+    componentDidMount = async () => {
       try {
-        // $FlowFixMe
-        uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
-      } catch (e) {
-        console.warn('Unable to retrieve current user.', e)
-      }
+        if (!firebase) {
+          throw Error('No firebase instance provided! Please make sure that you invoked initializeFirebase() with the correct firebase instance in the root of your application!')
+        }
 
-      const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
-      try {
-        this.resolveQueryMap(queryMap)
-      } catch (e) {
-        console.warn('RFC: Were not able to resolve query map correctly! Error details:', e)
+        const { currentUser } = firebase.auth()
+
+        const database = firebase.firestore()
+        const userId = currentUser ? currentUser.uid : null
+        const queryMap = queryMapFn(database, this.props, userId)
+        await this.resolveQueryMap(queryMap)
+      } catch (error) {
+        errorHandler(error)
       }
     }
-    componentDidUpdate = (prevProps: Object) => {
+
+    componentDidUpdate = async (prevProps: Object) => {
       if (prevProps === this.props) {
         return
       }
-      let uid = null
+
       try {
-        // $FlowFixMe
-        uid = firebase.auth().currentUser && firebase.auth().currentUser.uid
-      } catch (e) {
-        console.warn('Unable to retrieve current user.', e)
-      }
-      const queryMap = queryMapFn(firebase.firestore(), this.props, uid)
-      Object.entries(queryMap).forEach(async ([property, query]: [string, any]) => {
-        const shouldUpdateResult = await this.shouldUpdateResult(property, query)
-        if (!shouldUpdateResult) {
-          return
-        }
-        if (Array.isArray(query)) {
-          if (type !== 'once') {
-            const {
-              references: {
-                [property]: referencesArray,
-              },
-            } = this.state
-            // eslint-disable-next-line no-unused-expressions
-            referencesArray && referencesArray.forEach(reference => reference && reference())
+        const { currentUser } = firebase.auth()
+
+        const database = firebase.firestore()
+        const userId = currentUser ? currentUser.uid : null
+        const queryMap = queryMapFn(database, this.props, userId)
+        await Promise.all(Object.entries(queryMap).map(async ([property, query]: [string, any]) => {
+          const shouldUpdateResult = await this.shouldUpdateResult(property, query)
+          if (!shouldUpdateResult) {
+            return
           }
-          // Clear state first
-          this.setState(state => ({
-            results: {
-              ...state.results,
-              [property]: null,
-            },
-          }),
-          () => // After clearing state, update the prop with correct data
-            query.forEach(async (docRef, index) => (
+
+          if (Array.isArray(query)) {
+            if (type !== 'once') {
+              const {
+                references: {
+                  [property]: referencesArray,
+                },
+              } = this.state
+              // eslint-disable-next-line no-unused-expressions
+              referencesArray && referencesArray.forEach(reference => reference && reference())
+            }
+            await Promise.all(query.map(async (docRef, index) => (
               type === 'once'
                 ? this.resolveGetQuery(await docRef, property, true, index)
                 : this.resolveRealTimeQuery(await docRef, property, true, index)
-            ))
-          )
-        } else {
-          const docRef = await query // In case of async passed in
-          if (type !== 'once') {
-            const {
-              references: {
-                [property]: reference,
-              },
-            } = this.state
-            // eslint-disable-next-line no-unused-expressions
-            reference && reference()
-            this.resolveRealTimeQuery(docRef, property)
+            )))
           } else {
-            this.resolveGetQuery(docRef, property)
+            const docRef = await query // In case of async passed in
+            if (type !== 'once') {
+              const {
+                references: {
+                  [property]: reference,
+                },
+              } = this.state
+              // eslint-disable-next-line no-unused-expressions
+              reference && reference()
+              this.resolveRealTimeQuery(docRef, property)
+            } else {
+              this.resolveGetQuery(docRef, property)
+            }
           }
-        }
-      })
+        }))
+      } catch (error) {
+        errorHandler(error)
+      }
     }
 
     componentWillUnmount = () => {
-      if (!firebase) {
-        return
-      }
-      // If type of connection is real time, unsubscribe listener for the data
-      if (type !== 'once') {
-        Object.values(this.state.references).forEach(
-          (reference) => {
-            if (Array.isArray(reference)) {
-              // In case Array of promises were provided, unsubscribe every one of the listeners
+      try {
+        // If type of connection is real time, unsubscribe listener for the data
+        if (type !== 'once') {
+          Object.values(this.state.references).forEach(
+            (reference) => {
+              if (Array.isArray(reference)) {
+                // In case Array of promises were provided, unsubscribe every one of the listeners
+                // $FlowFixMe
+                return reference.forEach(ref => ref && ref())
+              }
               // $FlowFixMe
-              return reference.forEach(ref => ref && ref())
+              return reference && reference() // this unsubscribes given reference
             }
-            // $FlowFixMe
-            return reference && reference() // this unsubscribes given reference
-          }
-        )
+          )
+        }
+      } catch (error) {
+        errorHandler(error)
       }
     }
-    resolveQueryMap = (queryMap: QueryMap) => {
-      Object.entries(queryMap).forEach(
+
+    resolveQueryMap = async (queryMap: QueryMap) =>
+      Promise.all(Object.entries(queryMap).map(
         // Type should be [string, Promise<any>], but flow cannot deal with Object.entries
         // see issue https://github.com/facebook/flow/issues/2221
         async ([property, query]: [string, any]) => {
           // Checks whether it is array of docRefs or just one docRef
           if (Array.isArray(query)) {
-            return query.map(async (potentialDocRef, index) => {
+            return Promise.all(query.map(async (potentialDocRef, index) => {
               const docRef = await potentialDocRef // In case of async function passed in
               return type === 'once'
                 ? this.resolveGetQuery(docRef, property, true, index)
                 : this.resolveRealTimeQuery(docRef, property, true, index)
-            })
+            }))
           }
           const docRef = await query // In case of async function passed in
           return type === 'once'
             ? this.resolveGetQuery(docRef, property)
             : this.resolveRealTimeQuery(docRef, property)
         }
-      )
-    }
+      ))
+
     resolveGetQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
       // We want to be safe in here, so due to some inconsistent state whole app
       // won't crash. This shouldn't happen unless programmer misuses this HOC
@@ -183,6 +182,7 @@ const connectFirestore = (
             )
           })
           .then(data => this.updateResults(data, property, isArray, index))
+          .catch(error => errorHandler(error, { property }))
       } else {
         // If user sends object or some other type data down the component, just update that
         // DocRef is `any` type
@@ -219,7 +219,7 @@ const connectFirestore = (
               }) : null
               this.updateResults(data, property, isArray, index)
             }
-          })
+          }, error => errorHandler(error, { property, path: getPath(docRef) }))
         // Store the reference, so when unmounting we can cancel the listener
         this.updateReferences(reference, property, isArray, index)
         return reference
@@ -286,14 +286,14 @@ const connectFirestore = (
       } = this.state
       const propertyInState = results[property]
       if (Array.isArray(query)) {
-        query.forEach(async (potentialDocRef, index) => {
+        await Promise.all(query.map(async (potentialDocRef, index) => {
           const previousDoc = propertyInState && propertyInState[index]
           const previousDocId = previousDoc && previousDoc.id
           const docRef = await potentialDocRef // In case async function was provided
           if (docRef.id !== previousDocId) {
             shouldUpdate = true
           }
-        })
+        }))
         const previousArrayLength = propertyInState && propertyInState.length
         if (query.length !== previousArrayLength) {
           shouldUpdate = true
