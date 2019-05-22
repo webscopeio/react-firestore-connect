@@ -30,7 +30,7 @@ initializeFirebase(firebase)
 ```
 
 
-Afterwards, you can easily use it - by default, calls are realtime, but you can send `once` as a third arguemnt, to get data just once:
+Afterwards, you can easily use it:
 ```jsx
 import { connectFirestore } from 'react-firestore-connect'
 
@@ -56,7 +56,6 @@ export default connectFirestore(
     usersArray: [db.collection('names').doc(props.id[0]), db.collection('names').doc(props.id[1]), db.collection('names').doc(props.id[2])], // You can also send array of doc referencies
   }),
   Example,
-  // 'once' -> pass in order to get the data just once
 )
 
 ```

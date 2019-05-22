@@ -32,11 +32,6 @@ const getPath = (ref: Object) => {
 const connectFirestore = (
   queryMapFn: (db: Object, props: *, uid: string | null) => QueryMap,
   ComposedComponent: any,
-  // By default we fetch data with realTime listener,
-  // but programmer can specify to get data just once
-  type?: 'once'
-  // Either firebase from 'react-native-firebase' for mobile apps
-  // or firebase from 'firebase' for web apps
 ) => {
   class FirestoreProvider extends React.Component<any, State> {
     state = {
@@ -79,34 +74,36 @@ const connectFirestore = (
           }
 
           if (Array.isArray(query)) {
-            if (type !== 'once') {
-              const {
-                references: {
-                  [property]: referencesArray,
-                },
-              } = this.state
-              // eslint-disable-next-line no-unused-expressions
-              referencesArray && referencesArray.forEach(reference => reference && reference())
+            const {
+              references: {
+                [property]: referencesArray,
+              },
+            } = this.state
+
+            if (referencesArray) {
+              referencesArray.forEach((reference) => {
+                if (reference) {
+                  reference()
+                }
+              })
             }
-            await Promise.all(query.map(async (docRef, index) => (
-              type === 'once'
-                ? this.resolveGetQuery(await docRef, property, true, index)
-                : this.resolveRealTimeQuery(await docRef, property, true, index)
-            )))
+
+            await Promise.all(query.map(async (docRef, index) =>
+              this.resolveRealTimeQuery(await docRef, property, true, index)
+            ))
           } else {
             const docRef = await query // In case of async passed in
-            if (type !== 'once') {
-              const {
-                references: {
-                  [property]: reference,
-                },
-              } = this.state
-              // eslint-disable-next-line no-unused-expressions
-              reference && reference()
-              this.resolveRealTimeQuery(docRef, property)
-            } else {
-              this.resolveGetQuery(docRef, property)
+            const {
+              references: {
+                [property]: reference,
+              },
+            } = this.state
+
+            if (reference) {
+              reference()
             }
+
+            this.resolveRealTimeQuery(docRef, property)
           }
         }))
       } catch (error) {
@@ -117,19 +114,17 @@ const connectFirestore = (
     componentWillUnmount = () => {
       try {
         // If type of connection is real time, unsubscribe listener for the data
-        if (type !== 'once') {
-          Object.values(this.state.references).forEach(
-            (reference) => {
-              if (Array.isArray(reference)) {
-                // In case Array of promises were provided, unsubscribe every one of the listeners
-                // $FlowFixMe
-                return reference.forEach(ref => ref && ref())
-              }
+        Object.values(this.state.references).forEach(
+          (reference) => {
+            if (Array.isArray(reference)) {
+              // In case Array of promises were provided, unsubscribe every one of the listeners
               // $FlowFixMe
-              return reference && reference() // this unsubscribes given reference
+              return reference.forEach(ref => ref && ref())
             }
-          )
-        }
+            // $FlowFixMe
+            return reference && reference() // this unsubscribes given reference
+          }
+        )
       } catch (error) {
         errorHandler(error)
       }
@@ -144,51 +139,13 @@ const connectFirestore = (
           if (Array.isArray(query)) {
             return Promise.all(query.map(async (potentialDocRef, index) => {
               const docRef = await potentialDocRef // In case of async function passed in
-              return type === 'once'
-                ? this.resolveGetQuery(docRef, property, true, index)
-                : this.resolveRealTimeQuery(docRef, property, true, index)
+              return this.resolveRealTimeQuery(docRef, property, true, index)
             }))
           }
           const docRef = await query // In case of async function passed in
-          return type === 'once'
-            ? this.resolveGetQuery(docRef, property)
-            : this.resolveRealTimeQuery(docRef, property)
+          return this.resolveRealTimeQuery(docRef, property)
         }
       ))
-
-    resolveGetQuery = (docRef: Object, property: string, isArray?: boolean, index?: number) => {
-      // We want to be safe in here, so due to some inconsistent state whole app
-      // won't crash. This shouldn't happen unless programmer misuses this HOC
-      if (docRef && docRef.get) {
-        docRef
-          .get()
-          .then((querySnapshot) => {
-            // Checks whether we are working with querySnapshot or with a doc
-            if (querySnapshot.docs) {
-              return querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-              }))
-            }
-            // Otherwise, it is doc - return doc itself & rename it for clarity
-            const doc = querySnapshot
-            return (
-              doc.exists
-                ? ({
-                  id: doc.id,
-                  ...doc.data(),
-                })
-                : null
-            )
-          })
-          .then(data => this.updateResults(data, property, isArray, index))
-          .catch(error => errorHandler(error, { property }))
-      } else {
-        // If user sends object or some other type data down the component, just update that
-        // DocRef is `any` type
-        this.updateResults(docRef, property, isArray, index)
-      }
-    }
 
     resolveRealTimeQuery = (
       docRef: Object,
