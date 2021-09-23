@@ -93,9 +93,15 @@ const connectFirestore = (
               })
             }
 
-            await Promise.all(query.map(async (docRef, index) =>
-              this.resolveRealTimeQuery(await docRef, property, true, index)
-            ))
+            // If query is empty, store empty array on the property
+            if (!query.length) {
+              this.updateResults(null, property, true, undefined, true)
+            } else {
+              await Promise.all(query.map(async (potentialDocRef, index) => {
+                const docRef = await potentialDocRef // In case of async function passed in
+                return this.resolveRealTimeQuery(docRef, property, true, index)
+              }))
+            }
           } else {
             const docRef = await query // In case of async passed in
             const {
@@ -142,10 +148,15 @@ const connectFirestore = (
         async ([property, query]: [string, any]) => {
           // Checks whether it is array of docRefs or just one docRef
           if (Array.isArray(query)) {
-            return Promise.all(query.map(async (potentialDocRef, index) => {
-              const docRef = await potentialDocRef // In case of async function passed in
-              return this.resolveRealTimeQuery(docRef, property, true, index)
-            }))
+            // If query is empty, store empty array on the property
+            if (!query.length) {
+              this.updateResults(null, property, true, undefined, true)
+            } else {
+              return Promise.all(query.map(async (potentialDocRef, index) => {
+                const docRef = await potentialDocRef // In case of async function passed in
+                return this.resolveRealTimeQuery(docRef, property, true, index)
+              }))
+            }
           }
           const docRef = await query // In case of async function passed in
           return this.resolveRealTimeQuery(docRef, property)
@@ -191,13 +202,27 @@ const connectFirestore = (
       return this.updateResults(docRef, property, isArray, index)
     }
 
-    updateResults = (data: any, property: string, isArray?: boolean, index?: number) => {
+    updateResults = (
+      data: any,
+      property: string,
+      isArray?: boolean,
+      index?: number,
+      isEmpty?: boolean, // Only for arrays - if array is empty, store empty array as a result
+    ) => {
       this.setState((state) => {
         if (!isArray) {
           return ({
             results: {
               ...state.results,
               [property]: data,
+            },
+          })
+        }
+        if (isEmpty) {
+          return ({
+            results: {
+              ...state.results,
+              [property]: [],
             },
           })
         }
