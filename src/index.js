@@ -67,8 +67,13 @@ const connectFirestore = (
         const database = firebase.firestore()
         const userId = currentUser ? currentUser.uid : null
         const queryMap = queryMapFn(database, this.props, userId)
+        const prevQueryMap = queryMapFn(database, this.props, userId)
         await Promise.all(Object.entries(queryMap).map(async ([property, query]: [string, any]) => {
-          const shouldUpdateResult = await this.shouldUpdateResult(property, query)
+          const shouldUpdateResult = await this.shouldUpdateResult(
+            property,
+            query,
+            prevQueryMap[property],
+          )
           if (!shouldUpdateResult) {
             return
           }
@@ -236,7 +241,7 @@ const connectFirestore = (
       })
     }
 
-    shouldUpdateResult = async (property: string, query: any) => {
+    shouldUpdateResult = async (property: string, query: any, prevQuery: any) => {
       let shouldUpdate = false
       const {
         results,
@@ -257,10 +262,21 @@ const connectFirestore = (
         }
         return shouldUpdate
       }
+
+      // Query is "where" query if result of query is an array (.where(prop, '==', value))
+      // Note - this only returns array after first successful fetch
+      const isFetchedWhereQuery = Array.isArray(propertyInState)
+
+      if (isFetchedWhereQuery) {
+        // We don't update where queries unless something changed - this returns query in format
+        // of "Query(collectionName, filters: [condition1 (prop == value), condition2...])"
+        // therefore we can just compare them as they are string
+        // eslint-disable-next-line no-underscore-dangle
+        return query._query.toString() !== prevQuery._query.toString()
+      }
+
       const previousDocId = propertyInState && propertyInState.id
       const docRef = await query // In case async function was provided
-      // If it doesn't have id, it is query => we have no way of checking
-      // Whether query results changed, therefore just refresh it if it is query
       return docRef && (docRef.id !== previousDocId || !docRef.id)
     }
 
