@@ -1,6 +1,6 @@
 {
   "name": "react-firestore-connect",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "HOC for React components which maps collections / documents from firestore into react components as props.",
   "author": "Olovorr",
   "license": "MIT",
