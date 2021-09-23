@@ -67,7 +67,7 @@ const connectFirestore = (
         const database = firebase.firestore()
         const userId = currentUser ? currentUser.uid : null
         const queryMap = queryMapFn(database, this.props, userId)
-        const prevQueryMap = queryMapFn(database, this.props, userId)
+        const prevQueryMap = queryMapFn(database, prevProps, userId)
         await Promise.all(Object.entries(queryMap).map(async ([property, query]: [string, any]) => {
           const shouldUpdateResult = await this.shouldUpdateResult(
             property,
