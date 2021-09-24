@@ -1,4 +1,5 @@
 // @flow
+/* eslint-disable no-underscore-dangle */
 import React from 'react'
 import hoistNonReactStatics from 'hoist-non-react-statics'
 import 'babel-polyfill' // to enable async / await (clear ups the code a lot)
@@ -293,11 +294,28 @@ const connectFirestore = (
       const isFetchedWhereQuery = Array.isArray(propertyInState)
 
       if (isFetchedWhereQuery) {
-        // We don't update where queries unless something changed - this returns query in format
-        // of "Query(collectionName, filters: [condition1 (prop == value), condition2...])"
-        // therefore we can just compare them as they are string
-        // eslint-disable-next-line no-underscore-dangle
-        return query._query.toString() !== prevQuery._query.toString()
+        // This works up to certain firestore version on web sdk
+        if (query._query && prevQuery._query) {
+          // We don't update where queries unless something changed - this returns query in format
+          // of "Query(collectionName, filters: [condition1 (prop == value), condition2...])"
+          // therefore we can just compare them as they are string
+          return query._query.toString() !== prevQuery._query.toString()
+        }
+        try {
+          // Unfortunately on react-native-firebase / possibly newer firebase versions we cannot
+          // check _query object, so whether collection path / modifiers changed, if not query
+          // is the same
+          const equalModifiers = JSON.stringify(query._modifiers)
+            === JSON.stringify(prevQuery._modifiers)
+          const equalCollectionPath = JSON.stringify(query._collectionPath)
+            === JSON.stringify(prevQuery._collectionPath)
+          // If both of them are equal, don't update - query did not change
+          return !(equalModifiers && equalCollectionPath)
+        } catch (error) {
+          // If this crashes for some reason, always reload the query to be on the safe side
+          errorHandler(error)
+          return true
+        }
       }
 
       const previousDocId = propertyInState && propertyInState.id
