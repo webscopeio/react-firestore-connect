@@ -227,9 +227,16 @@ const connectFirestore = (
             },
           })
         }
+        // Create new instance to avoid not rerendering when using React.memo or PureComponent
         const dataInCorrectFormat = [...(state.results[property] || [])]
         // $FlowFixMe - Store data on exactly the index in which order queries were sent
-        dataInCorrectFormat[index] = data
+        dataInCorrectFormat[index] = Array.isArray(data)
+          // Create new instance to avoid not rerendering when using React.memo or PureComponent
+          ? [...data]
+          : typeof data === 'object'
+            // Create new instance to avoid not rerendering when using React.memo or PureComponent
+            ? { ...data }
+            : data
 
         return ({
           results: {
