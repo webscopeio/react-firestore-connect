@@ -227,7 +227,7 @@ const connectFirestore = (
             },
           })
         }
-        const dataInCorrectFormat = state.results[property] || []
+        const dataInCorrectFormat = [...(state.results[property] || [])]
         // $FlowFixMe - Store data on exactly the index in which order queries were sent
         dataInCorrectFormat[index] = data
 
@@ -254,7 +254,8 @@ const connectFirestore = (
             },
           })
         }
-        const referenceInCorrectFormat = state.references[property] || []
+        const referenceInCorrectFormat = [...(state.references[property] || [])]
+
         // $FlowFixMe - Store the reference on exactly the index in which order queries were sent
         referenceInCorrectFormat[index] = reference
 
@@ -278,7 +279,7 @@ const connectFirestore = (
           const previousDoc = propertyInState && propertyInState[index]
           const previousDocId = previousDoc && previousDoc.id
           const docRef = await potentialDocRef // In case async function was provided
-          if (docRef.id !== previousDocId) {
+          if (docRef && docRef.id !== previousDocId) {
             shouldUpdate = true
           }
         }))
