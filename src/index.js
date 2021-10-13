@@ -233,7 +233,8 @@ const connectFirestore = (
         dataInCorrectFormat[index] = Array.isArray(data)
           // Create new instance to avoid not rerendering when using React.memo or PureComponent
           ? [...data]
-          : typeof data === 'object'
+          // null is typeof Object, but we do want to return null and not empty object if no result
+          : data !== null && typeof data === 'object'
             // Create new instance to avoid not rerendering when using React.memo or PureComponent
             ? { ...data }
             : data
